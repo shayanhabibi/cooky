@@ -8,6 +8,9 @@ It is also built to be extremely memory efficient. They are designed to span
 less than a single cache line to make them suitable for use in multi threading
 paradigms.
 
+The cookie jar is made to be as fast to access and modify as possible to ensure
+concurrent use is not bottlenecked by its use.
+
 ## Thin Strings
 
 Strings are excessively large for cookies which are primarily static for the
