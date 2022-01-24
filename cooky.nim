@@ -7,6 +7,7 @@ import std/strutils
 import std/parseutils
 import std/times
 import std/tables {.all.}
+export tables.len
 
 type
   CookyJar = TableRef[string, TableRef[string, seq[Cooky]]]
@@ -17,7 +18,8 @@ type
     x.key is string
     x.value is string
 
-  Cooky* = ref object
+  Cooky* = ref CookyObj
+  CookyObj* = object
     name*: tstring # 8 bytes
     value*: tstring  # 8 bytes
     maxAge*: int64  # 8 bytes
@@ -35,6 +37,9 @@ type
 
 converter toString(x: Cookys): string = x.string
 converter toCookys(x: string): Cookys = x.Cookys
+
+proc `==`*(x, y: Cooky): bool {.inline.} =
+  x.name == y.name
 
 proc newCooky(): Cooky =
   Cooky(maxAge: -1)
@@ -102,12 +107,11 @@ template parseValue(inp: string, pos, pos2: var int, default: string): string =
     pos = pos2 + 1
     val
 
-proc parseCooky*(x: CookyHeader): Cooky =
-  assert x.value isnot "", "Set-Cookie had no value"
+proc parseCooky*(inp: sink string): Cooky =
+  assert inp isnot "", "Set-Cookie had no value"
 
-  result = initCooky()
+  result = newCooky()
 
-  let inp = x.value
   var pos: int
   var pos2: int
 
@@ -146,6 +150,10 @@ proc parseCooky*(x: CookyHeader): Cooky =
       discard parseValue(inp, pos, pos2)
       echo "Found unexpected attribute in Set-Cookie header: ", ident
 
+proc parseCooky*(x: CookyHeader): Cooky =
+  assert x.value isnot "", "Set-Cookie had no value"
+  x.value.parseCooky()
+
 #[
   CookyJar requires lower level implementation hacks to make it as efficient
   as possible
@@ -160,7 +168,9 @@ privateAccess(Table)
 template maxHash(t): untyped = high(t.data)
 template dataLen(t): untyped = len(t.data)
 
+{.push discardable.}
 include std/tableimpl
+{.pop.}
 
 proc newCookyJar*(): CookyJar =
   result = newTable[string, TableRef[string, seq[Cooky]]]()
@@ -173,6 +183,8 @@ proc cRawGetDeepImpl[X, A](t: X, key: A, hc: var Hash): int {.inline.} =
   result = h
   
 proc incl*(cj: CookyJar, c: Cooky) =
+  ## Includes the cooky into the cooky jar or replaces it if it found one
+  ## with the same value
   var hc: Hash
   var hcPath: Hash
   var idxDomain = rawGet(cj[], c.domain, hc)
@@ -200,3 +212,51 @@ proc incl*(cj: CookyJar, c: Cooky) =
     sq[idx] = c
   else:
     sq.add c
+
+template cDelImpl(t: untyped, i: untyped) =
+  let msk = maxHash(t)
+  if i >= 0:
+    dec(t.counter)
+    block outer:
+      while true:         # KnuthV3 Algo6.4R adapted for i=i+1 instead of i=i-1
+        var j = i         # The correctness of this depends on (h+1) in nextTry
+        var r = j         # though may be adaptable to other simple sequences.
+        t.data[i].hcode = 0                     # mark current EMPTY
+        t.data[i].key = default(typeof(t.data[i].key))
+        t.data[i].val = default(typeof(t.data[i].val))
+        while true:
+          i = (i + 1) and msk            # increment mod table size
+          if isEmpty(t.data[i].hcode):               # end of collision cluster; So all done
+            break outer
+          r = t.data[i].hcode and msk        # initial probe index for key@slot i
+          if not ((i >= r and r > j) or (r > j and j > i) or (j > i and i >= r)):
+            break
+        when defined(js):
+          t.data[j] = t.data[i]
+        else:
+          t.data[j] = move(t.data[i]) # data[j] will be marked EMPTY next loop
+
+proc excl*(cj: CookyJar, c: Cooky) =
+  var hc, hcPath: Hash
+  var idxDomain, idxPath: int
+
+  idxDomain = rawGet(cj[], c.domain, hc)
+  if idxDomain < 0:
+    return
+
+  var tb = cj[].data[idxDomain].val
+  
+  idxPath = rawGet(tb[], c.path, hcPath)
+  if idxPath < 0:
+    return
+
+  template sq: untyped = tb[].data[idxPath].val
+
+  for i,v in sq:
+    if v == c:
+      sq.del(i)
+      if sq.len == 0:
+        cDelImpl(tb[], idxPath)
+        if tb.len == 0:
+          cDelImpl(cj[], idxDomain)
+      break

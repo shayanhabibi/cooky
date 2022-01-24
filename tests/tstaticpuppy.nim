@@ -13,16 +13,16 @@ const headers = @[(key: "Cache-Control", value: "no-store, no-cache, must-revali
 import cooky
 
 var jar = newCookyJar()
-
+var cookies = newSeq[Cooky]()
 for x in headers:
   if x.isCookySetter():
     let cky = x.parseCooky()
+    cookies.add cky
     jar.incl cky
 
-import std/tables
 
-for k,v in jar.pairs:
-  echo k
-  for ke,ve in v:
-    echo ke
-    echo repr ve
+for cky in cookies:
+  echo len jar
+  jar.excl cky
+
+echo len jar
