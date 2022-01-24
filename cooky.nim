@@ -165,10 +165,6 @@ include std/tableimpl
 proc newCookyJar*(): CookyJar =
   result = newTable[string, TableRef[string, seq[Cooky]]]()
 
-proc hasKey[T](t: CookyJar, key: T): bool =
-  var hc: Hash
-  result = rawGet(t[], key, hc) >= 0
-
 proc cRawGetDeepImpl[X, A](t: X, key: A, hc: var Hash): int {.inline.} =
   ## Same as one in tableimpl but without the hash gen
   var h: Hash = hc and maxHash(t)
