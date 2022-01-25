@@ -20,9 +20,8 @@ for x in headers:
     cookies.add cky
     jar.incl cky
 
+var mycooks = getCookys(jar, "https://my.example.com/plex/store/mexico/", true)
+echo mycooks.len
 
 for cky in cookies:
-  echo len jar
   jar.excl cky
-
-echo len jar
