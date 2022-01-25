@@ -52,9 +52,9 @@ proc fromEpochDay*(epochday: int64):
 
 type
   ParthDate* {.size: 4.} = object
-    day {.bitsize: 5.}: uint8 # goes up to 31
-    month {.bitsize: 4.}: uint8 # goes up to 15
-    year {.bitsize: 11.}: uint16 # goes up to 4095
+    day {.bitsize: 5.}: 0u8..31u8
+    month {.bitsize: 4.}: 0u8..15u8
+    year {.bitsize: 11.}: 0u16..4095u16
   ParthTime* = object
     seconds: int64
   ParthDateTime* = object
