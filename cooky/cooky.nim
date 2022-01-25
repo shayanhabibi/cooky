@@ -2,6 +2,7 @@ import cooky/spec
 import cooky/utils/thinstring
 
 import std/strutils
+import std/strformat
 import std/parseutils
 import std/times
 
@@ -27,6 +28,9 @@ type
 
 proc `==`*(x, y: Cooky): bool {.inline.} =
   x.name == y.name
+
+proc `$`*(c: Cooky): string =
+  fmt"{c.name}={c.value}"
 
 proc newCooky*(): Cooky =
   Cooky(maxAge: -1)
