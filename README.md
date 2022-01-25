@@ -2,6 +2,9 @@
 
 User cookie handling for CLIENTS.
 
+The purpose is to be a dependency for client libraries which automatically
+handle cookies for the user.
+
 Designed primarily to work in concert with the Parthian fork of Puppy.
 
 It is also built to be extremely memory efficient. They are designed to span
