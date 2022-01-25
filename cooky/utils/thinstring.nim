@@ -12,9 +12,9 @@ proc `=destroy`*(t: var tstring) =
 proc asign*(t: var tstring, str: string) =
   let strlen = str.len
   if t.pntr.isNil:
-    t.pntr = allocShared(strlen)
+    t.pntr = allocShared(strlen + 1)
   else:
-    t.pntr = t.pntr.reallocShared(strlen)
+    t.pntr = t.pntr.reallocShared(strlen + 1)
   copyMem(t.pntr, unsafeAddr str[0], strlen)
   let terminator = cast[ptr char](
     cast[uint](t.pntr) + cast[uint](strlen)
