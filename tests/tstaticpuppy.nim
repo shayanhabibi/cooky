@@ -21,7 +21,7 @@ for x in headers:
     jar.incl cky
 
 var mycooks = getCookys(jar, "https://my.example.com/plex/store/mexico/", true)
-echo mycooks.len
+echo mycooks.getCookyHeader()
 
 for cky in cookies:
   jar.excl cky
