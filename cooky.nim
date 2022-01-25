@@ -134,6 +134,9 @@ proc parseCooky*(inp: sink string): Cooky =
       let val = parseValue(inp, pos, pos2)
       result.maxAge = parseCookyDate(val)
     of "domain":
+      if inp[pos + 1] == '.':
+        pos2 += 1
+        pos += 1
       let val = parseValue(inp, pos, pos2)
       result.domain.asign val
     of "path":
@@ -260,3 +263,63 @@ proc excl*(cj: CookyJar, c: Cooky) =
         if tb.len == 0:
           cDelImpl(cj[], idxDomain)
       break
+
+import std/uri
+
+proc getCookys*(cj: CookyJar, uri: Uri, clearExpired: bool = true): seq[Cooky] =
+  ## Gathers all the relevant cookys from a cookyjar for the given uri.
+  ## Any expired cookies are deleted.
+  let currTime = getTime().toUnix()
+  var inp = uri.hostname
+  var highIdx = high(inp)
+  var pos: int
+
+  var domainTbs: seq[(int, TableRef[string, seq[Cooky]])]
+
+  while pos < highIdx:
+    var hc: Hash
+    let idxDomain = rawGet(cj[], inp[pos .. highIdx], hc)
+    if idxDomain >= 0:
+      domainTbs.add (idxDomain, cj[].data[idxDomain].val)
+    
+    pos += skipUntil(inp[pos .. highIdx], '.', 0) + 1
+
+  if domainTbs.len == 0:
+    return
+
+  inp = uri.path
+  highIdx = high(inp)
+  pos = 0
+  var delTbs: seq[int]
+  while pos < highIdx:
+    inc pos
+    var hc: Hash = genHash(inp[0 ..< pos])
+    if clearExpired:
+      if len(delTbs) > 0:
+        for i in delTbs:
+          domainTbs.del i
+        reset delTbs
+    for tbIdx, (idxDomain, tb) in domainTbs:
+      var idxPath = rawGetKnownHC(tb[], inp[0 ..< pos], hc)
+      if idxPath >= 0:
+        if clearExpired:
+          var delIdxs: seq[int]
+          for i,cky in tb[].data[idxPath].val:
+            if cky.maxAge >= 0 and currTime > cky.maxAge:
+              # Cooky is expired; time to die bitch
+              delIdxs.add i
+          for i in delIdxs:
+            tb[].data[idxPath].val.del i
+            
+          if tb[].data[idxPath].val.len == 0:
+            # all the cookys timed out so we better clear this thang out
+            cDelImpl(tb[], idxPath)
+            if tb.len == 0:
+              var idxDelDomain = idxDomain
+              cDelImpl(cj[], idxDelDomain)
+              delTbs.add tbIdx
+        result.add tb[].data[idxPath].val
+    pos += skipUntil(inp, '/', pos)
+
+proc getCookys*(cj: CookyJar; uri: string, clearExpired: bool = true): seq[Cooky] =
+  getCookys(cj, parseUri(uri), clearExpired)
