@@ -28,8 +28,6 @@ type
     ## Holds the cookies relating to a particular domain
     ## separated by paths
 
-
-
 proc newCookyJar*(): CookyJar =
   result = newTable[string, TableRef[string, seq[Cooky]]]()
 
@@ -110,68 +108,104 @@ proc excl*(cj: CookyJar, c: Cooky) =
 
   template sq: untyped = tb[].data[idxPath].val
 
+  var delSeq: seq[int]
   for i,v in sq:
     if v == c:
-      sq.del(i)
-      if sq.len == 0:
-        cDelImpl(tb[], idxPath)
-        if tb.len == 0:
-          cDelImpl(cj[], idxDomain)
-      break
+      delSeq.add i
+  for i in delSeq:
+    sq.del(i)
+  if sq.len == 0:
+    cDelImpl(tb[], idxPath)
+    if tb.len == 0:
+      cDelImpl(cj[], idxDomain)
 
 proc getCookys*(cj: CookyJar, uri: Uri, clearExpired: bool = true): seq[Cooky] =
   ## Gathers all the relevant cookys from a cookyjar for the given uri.
   ## Any expired cookies are deleted.
+  
+  # get currTime to compare to expiries of cookys
   let currTime = getTime().toUnix()
-  var inp = uri.hostname
-  var highIdx = high(inp)
-  var pos: int
 
+  var
+    inp: string
+    highIdx, pos: int
+
+  inp = uri.hostname
+  highIdx = high(inp)
+
+  # create a list to put all matched domains in the cooky jar to the hostname
+  # of the given uri
   var domainTbs: seq[(int, TableRef[string, seq[Cooky]])]
 
   while pos < highIdx:
     var hc: Hash
     let idxDomain = rawGet(cj[], inp[pos .. highIdx], hc)
     if idxDomain >= 0:
+      # Found matched table; add to list
       domainTbs.add (idxDomain, cj[].data[idxDomain].val)
-    
+
+    # Skip until the next domain delimiter, and then skip that delimiter
     pos += skipUntil(inp[pos .. highIdx], '.', 0) + 1
 
   if domainTbs.len == 0:
+    # no matches were found for the domain
     return
 
   inp = uri.path
   highIdx = high(inp)
   pos = 0
+
+  # prepare a list of tables for domains that are to be deleted because they
+  # only contained expired cookys and are now dead/empty
   var delTbs: seq[int]
+  
   while pos < highIdx:
+    # iterate over the path one step at a time and determine if the domain
+    # contains any cookys for that path and beyond
     inc pos
+    # Generate the hash for the path
     var hc: Hash = genHash(inp[0 ..< pos])
-    if clearExpired:
-      if len(delTbs) > 0:
-        for i in delTbs:
-          domainTbs.del i
-        reset delTbs
+
+    if clearExpired and len(delTbs) > 0:
+      # If we have some domain tables to delete then we do it here
+      for i in delTbs:
+        domainTbs.del i
+      reset delTbs
+      
     for tbIdx, (idxDomain, tb) in domainTbs:
+      # For each domain table, we now use the predetermined hash to find matches
       var idxPath = rawGetKnownHC(tb[], inp[0 ..< pos], hc)
       if idxPath >= 0:
-        if clearExpired:
-          var delIdxs: seq[int]
-          for i,cky in tb[].data[idxPath].val:
-            if cky.maxAge >= 0 and currTime > cky.maxAge:
-              # Cooky is expired; time to die bitch
-              delIdxs.add i
-          for i in delIdxs:
-            tb[].data[idxPath].val.del i
-            
-          if tb[].data[idxPath].val.len == 0:
-            # all the cookys timed out so we better clear this thang out
-            cDelImpl(tb[], idxPath)
-            if tb.len == 0:
-              var idxDelDomain = idxDomain
-              cDelImpl(cj[], idxDelDomain)
-              delTbs.add tbIdx
-        result.add tb[].data[idxPath].val
+        # Match found for path
+        block:
+          if clearExpired:
+            var delIdxs: seq[int]
+
+            for i,cky in tb[].data[idxPath].val:
+              # Iterate over all the cookys in the path sequence to see if any
+              # have expired (-1 have no expiry)
+              if cky.maxAge >= 0 and currTime > cky.maxAge:
+                # Cooky is expired; time to die bitch
+                delIdxs.add i
+            # Delete all the cookies that were expired
+            for i in delIdxs:
+              tb[].data[idxPath].val.del i
+            # Check if we now have to delete the path from the domain table
+            if tb[].data[idxPath].val.len == 0:
+              # all the cookys timed out so we better clear this thang out
+              cDelImpl(tb[], idxPath)
+              if tb.len == 0:
+                # there are no more paths in the domain table, so we better
+                # clear it out
+                var idxDelDomain = idxDomain
+                cDelImpl(cj[], idxDelDomain)
+                # add to the list of domain tables to delete
+                delTbs.add tbIdx
+              # The key/value is invalid so we will break the block to prevent
+              # adding undefined memory
+              break
+          result.add tb[].data[idxPath].val
+
     pos += skipUntil(inp, '/', pos)
 
 proc getCookys*(cj: CookyJar; uri: string, clearExpired: bool = true): seq[Cooky] =
