@@ -19,9 +19,7 @@ privateAccess(Table)
 template maxHash(t): untyped = high(t.data)
 template dataLen(t): untyped = len(t.data)
 
-{.push discardable.}
 include std/tableimpl
-{.pop.}
 
 type
   CookyJar* = TableRef[string, TableRef[string, seq[Cooky]]]
