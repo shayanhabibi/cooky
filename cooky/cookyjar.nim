@@ -63,7 +63,6 @@ proc incl*(cj: CookyJar, c: Cooky) =
   
   template sq: untyped = tb[].data[idxPath].val
   let idx = sq.find(c)
-  echo idx
   if idx >= 0:
     sq[idx] = c
   else:
