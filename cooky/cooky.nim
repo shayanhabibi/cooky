@@ -27,7 +27,7 @@ type
     padding: array[7, char]
 
 proc `==`*(x, y: Cooky): bool {.inline.} =
-  x.name == y.name
+  x.name.toCString == y.name.toCString
 
 proc `$`*(c: Cooky): string =
   fmt"{c.name}={c.value}"
