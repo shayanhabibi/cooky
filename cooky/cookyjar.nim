@@ -63,6 +63,7 @@ proc incl*(cj: CookyJar, c: Cooky) =
   
   template sq: untyped = tb[].data[idxPath].val
   let idx = sq.find(c)
+  echo idx
   if idx >= 0:
     sq[idx] = c
   else:
@@ -211,6 +212,8 @@ proc getCookys*(cj: CookyJar; uri: string, clearExpired: bool = true): seq[Cooky
   getCookys(cj, parseUri(uri), clearExpired)
 
 proc `$`*(ckys: seq[Cooky]): string =
+  if ckys.len == 0:
+    return ""
   result = $ckys[0]
   if ckys.len > 1:
     for cky in ckys[1..^1]:
